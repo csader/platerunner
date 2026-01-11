@@ -2,7 +2,7 @@
 
 Self-hosted 3MF processor for Bambu Lab A1 Mini PlateCycler automation. Combines multiple print jobs with automatic plate swapping sequences for unattended batch printing.
 
-![PlateRunner Interface](https://via.placeholder.com/800x400/1f2937/ffffff?text=PlateRunner+Interface)
+![PlateRunner Interface](./public/screenshot.png)
 
 ## Features
 
