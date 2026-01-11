@@ -150,22 +150,18 @@ platerunner/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - Inspired by Chitu's PlateCycler automation tools
 - Built for the Bambu Lab A1 Mini community
-- Uses the excellent shadcn/ui component library
+- Uses shadcn/ui component library
+- Vibe coded with Claude Code and Kiro CLI
 
 ## Support
 
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/yourusername/platerunner/issues)
-- **Discussions**: Join the conversation in [GitHub Discussions](https://github.com/yourusername/platerunner/discussions)
-- **Documentation**: Check the [Wiki](https://github.com/yourusername/platerunner/wiki) for detailed guides
+- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/csader/platerunner/issues)
+- **Discussions**: Join the conversation in [GitHub Discussions](https://github.com/csader/platerunner/discussions)
 
 ---
 
-**Note**: This is an unofficial tool not affiliated with Bambu Lab. Use at your own risk and always monitor your prints.
+**Note**: This is an unofficial tool not affiliated with Bambu Lab or Chitu. Use at your own risk and always monitor your prints.
