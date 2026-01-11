@@ -1,5 +1,7 @@
 # PlateRunner
 
+**Yes, this was vibe coded.** 🤖
+
 Self-hosted 3MF processor for Bambu Lab A1 Mini PlateCycler automation. Combines multiple print jobs with automatic plate swapping sequences for unattended batch printing.
 
 ![PlateRunner Interface](./public/screenshot.png)
@@ -50,7 +52,7 @@ npm start
 
 ## Usage
 
-1. **Upload 3MF Files** - Drag and drop your Bambu Lab 3MF files onto the upload area
+1. **Upload 3MF Files** - Drag and drop your Bambu Lab 3MF Gcode files onto the upload area - **Note**: these aren't just 3MFs, they're the sliced plate files you get by going to File > Export > Sliced Plate or All Sliced Plates
 2. **Configure Queue** - Reorder jobs and set copy counts as needed
 3. **Review Statistics** - Check total print time and filament requirements
 4. **Customize Swap Sequence** - Modify the plate swap G-code if needed (optional)
