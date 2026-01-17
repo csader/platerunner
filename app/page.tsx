@@ -133,7 +133,12 @@ export default function Home() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">PlateRunner</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">PlateRunner</h1>
+            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              v{process.env.APP_VERSION}
+            </span>
+          </div>
           <p className="mt-1 text-muted-foreground">
             Self-hosted 3MF processor for Bambu Lab A1 Mini PlateCycler automation
           </p>
