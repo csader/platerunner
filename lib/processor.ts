@@ -42,7 +42,8 @@ function hasSwapSequence(gcode: string): boolean {
  */
 function ensureSwapSequence(gcode: string, swapSequence: string): string {
   if (hasSwapSequence(gcode)) {
-    return gcode; // Already has swap sequence
+    // Even if it already has a swap sequence, ensure it ends with newlines for concatenation
+    return gcode.trimEnd() + "\n\n";
   }
 
   const marker = "; EXECUTABLE_BLOCK_END";
@@ -64,8 +65,9 @@ function ensureSwapSequence(gcode: string, swapSequence: string): string {
     insertPoint++; // Move past the empty line
   }
 
-  // Insert swap sequence (no trailing newline needed - next copy will start fresh)
-  return gcode.slice(0, insertPoint) + swapSequence;
+  // Insert swap sequence with trailing newlines to ensure clean separation from next gcode
+  // The newlines ensure the next gcode's header starts on its own line
+  return gcode.slice(0, insertPoint) + swapSequence.trimEnd() + "\n\n";
 }
 
 /**
