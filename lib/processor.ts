@@ -268,6 +268,36 @@ export async function processJobs(
 }
 
 /**
+ * Generate a utility-only 3MF that contains G-code with no actual print —
+ * just the provided sequence repeated `cycles` times.
+ * Useful for "clear plate" (1 cycle) or "test cycler" (N cycles).
+ */
+export async function generateUtility3MF(
+  swapSequence: string,
+  cycles: number = 1
+): Promise<Blob> {
+  const gcode = Array(cycles).fill(swapSequence.trimEnd()).join("\n\n") + "\n";
+  const gcodeHash = SparkMD5.hash(gcode);
+
+  const sliceInfo = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<config>',
+    '  <plate>',
+    '    <metadata key="index" value="1"/>',
+    '    <filament id="1" type="PLA" used_g="0.00" used_m="0.00"/>',
+    '  </plate>',
+    '</config>',
+  ].join("\n");
+
+  const zip = new JSZip();
+  zip.file("Metadata/plate_1.gcode", gcode);
+  zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
+  zip.file("Metadata/slice_info.config", sliceInfo);
+
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+}
+
+/**
  * Clean up thumbnail URLs to prevent memory leaks
  */
 export function cleanupJob(job: PrintJob): void {

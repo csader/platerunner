@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, RotateCcw, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropzone } from "@/components/dropzone";
@@ -16,6 +16,7 @@ import {
   calculateTotalTime,
   calculateTotalFilament,
   calculatePlateSwaps,
+  generateUtility3MF,
   type PrintJob,
 } from "@/lib/processor";
 import {
@@ -30,6 +31,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customFilename, setCustomFilename] = useState("");
+  const [testCycles, setTestCycles] = useState(5);
 
   // Load saved sequence on mount
   useEffect(() => {
@@ -94,6 +96,48 @@ export default function Home() {
 
   // Get the filename to use (custom or suggested)
   const filenameToUse = customFilename.trim() || suggestedFilename;
+
+  // Generate and download a "clear plate" 3MF
+  const handleClearPlate = useCallback(async () => {
+    setIsProcessing(true);
+    setError(null);
+    try {
+      const blob = await generateUtility3MF(sequence, 1);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "clear-plate.3mf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Failed to generate clear plate: ${(err as Error).message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [sequence]);
+
+  // Generate and download a "test cycler" 3MF
+  const handleTestCycler = useCallback(async () => {
+    setIsProcessing(true);
+    setError(null);
+    try {
+      const blob = await generateUtility3MF(sequence, testCycles);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `test-cycler-${testCycles}x.3mf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Failed to generate test cycler: ${(err as Error).message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [sequence, testCycles]);
 
   // Process and download
   const handleProcess = useCallback(async () => {
@@ -187,6 +231,48 @@ export default function Home() {
           sequence={sequence}
           onSequenceChange={handleSequenceChange}
         />
+      </div>
+
+      {/* Quick Tools */}
+      <div className="mb-6">
+        <h2 className="mb-3 text-lg font-semibold">Quick Tools</h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <Button
+            variant="outline"
+            onClick={handleClearPlate}
+            disabled={isProcessing}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Clear Plate
+          </Button>
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Cycles
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={testCycles}
+                onChange={(e) => setTestCycles(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                className="w-20"
+                disabled={isProcessing}
+              />
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleTestCycler}
+              disabled={isProcessing}
+            >
+              <FlaskConical className="mr-2 h-4 w-4" />
+              Test Cycler
+            </Button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Clear Plate runs one swap cycle to remove the current plate. Test Cycler runs multiple swap cycles without printing — useful for calibration.
+        </p>
       </div>
 
       {/* Filename & Process Button */}
