@@ -385,9 +385,38 @@ export async function generateUtility3MF(
     '    <metadata key="plater_name" value=""/>',
     '    <metadata key="locked" value="false"/>',
     '    <metadata key="gcode_file" value="Metadata/plate_1.gcode"/>',
+    '    <metadata key="pattern_bbox_file" value="Metadata/plate_1.json"/>',
     '  </plate>',
     '</config>',
   ].join("\n");
+
+  const plateJson = JSON.stringify({
+    bbox_all: [89.0, 89.0, 91.0, 91.0],
+    bbox_objects: [{
+      area: 4.0,
+      bbox: [89.0, 89.0, 91.0, 91.0],
+      id: 1,
+      layer_height: 0.2,
+      name: "Cube",
+    }],
+    bed_type: "textured_plate",
+    filament_colors: ["#C0C0C0"],
+    filament_ids: [0],
+    first_extruder: 0,
+    is_seq_print: false,
+    nozzle_diameter: 0.4,
+    version: 2,
+  });
+
+  // Minimal project_settings.config so Bambu Studio recognizes this as a sliced project
+  const projectSettings = JSON.stringify({
+    printer_model: "Bambu Lab A1 mini",
+    printer_variant: "0.4",
+    printer_settings_id: "Bambu Lab A1 mini 0.4 nozzle",
+    print_settings_id: "0.20mm Standard @BBL A1M",
+    filament_settings_id: ["Generic PLA @BBL A1M"],
+    printer_technology: "FFF",
+  }, null, 4);
 
   const sliceInfo = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -429,6 +458,8 @@ export async function generateUtility3MF(
   zip.file("Metadata/cut_information.xml", cutInfo);
   zip.file("Metadata/plate_1.gcode", gcode);
   zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
+  zip.file("Metadata/plate_1.json", plateJson);
+  zip.file("Metadata/project_settings.config", projectSettings);
   zip.file("Metadata/slice_info.config", sliceInfo);
 
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
