@@ -334,13 +334,39 @@ export async function generateUtility3MF(
     '</Relationships>',
   ].join("\n");
 
+  // 3D model with a minimal 1mm cube so Bambu Studio doesn't complain about missing geometry
   const model = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">',
+    '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">',
     ' <metadata name="Application">PlateRunner</metadata>',
     ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
-    ' <resources/>',
-    ' <build/>',
+    ' <resources>',
+    '  <object id="1" type="model">',
+    '   <mesh>',
+    '    <vertices>',
+    '     <vertex x="0" y="0" z="0"/>',
+    '     <vertex x="1" y="0" z="0"/>',
+    '     <vertex x="1" y="1" z="0"/>',
+    '     <vertex x="0" y="1" z="0"/>',
+    '     <vertex x="0" y="0" z="1"/>',
+    '     <vertex x="1" y="0" z="1"/>',
+    '     <vertex x="1" y="1" z="1"/>',
+    '     <vertex x="0" y="1" z="1"/>',
+    '    </vertices>',
+    '    <triangles>',
+    '     <triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="2" v3="3"/>',
+    '     <triangle v1="4" v2="6" v3="5"/><triangle v1="4" v2="7" v3="6"/>',
+    '     <triangle v1="0" v2="4" v3="5"/><triangle v1="0" v2="5" v3="1"/>',
+    '     <triangle v1="2" v2="6" v3="7"/><triangle v1="2" v2="7" v3="3"/>',
+    '     <triangle v1="0" v2="7" v3="4"/><triangle v1="0" v2="3" v3="7"/>',
+    '     <triangle v1="1" v2="5" v3="6"/><triangle v1="1" v2="6" v3="2"/>',
+    '    </triangles>',
+    '   </mesh>',
+    '  </object>',
+    ' </resources>',
+    ' <build>',
+    '  <item objectid="1" p:UUID="cb828680-f429-4706-a0f7-1000000000ff" transform="1 0 0 0 1 0 0 0 1 89 89 0"/>',
+    ' </build>',
     '</model>',
   ].join("\n");
 
@@ -366,13 +392,32 @@ export async function generateUtility3MF(
   const sliceInfo = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<config>',
+    '  <header>',
+    '    <header_item key="X-BBL-Client-Type" value="slicer"/>',
+    '    <header_item key="X-BBL-Client-Version" value="01.09.01.67"/>',
+    '  </header>',
     '  <plate>',
     '    <metadata key="index" value="1"/>',
+    '    <metadata key="printer_model_id" value="N1"/>',
+    '    <metadata key="nozzle_diameters" value="0.4"/>',
     '    <metadata key="prediction" value="0"/>',
     '    <metadata key="weight" value="0.00"/>',
+    '    <metadata key="outside" value="false"/>',
+    '    <metadata key="support_used" value="false"/>',
+    '    <metadata key="label_object_enabled" value="false"/>',
+    '    <object identify_id="1" name="Cube" skipped="false"/>',
     '    <filament id="1" type="PLA" color="#C0C0C0" used_m="0.00" used_g="0.00"/>',
     '  </plate>',
     '</config>',
+  ].join("\n");
+
+  const cutInfo = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<objects>',
+    ' <object id="1">',
+    '  <cut_id id="0" check_sum="1" connectors_cnt="0"/>',
+    ' </object>',
+    '</objects>',
   ].join("\n");
 
   const zip = new JSZip();
@@ -381,6 +426,7 @@ export async function generateUtility3MF(
   zip.file("3D/3dmodel.model", model);
   zip.file("Metadata/_rels/model_settings.config.rels", modelSettingsRels);
   zip.file("Metadata/model_settings.config", modelSettings);
+  zip.file("Metadata/cut_information.xml", cutInfo);
   zip.file("Metadata/plate_1.gcode", gcode);
   zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
   zip.file("Metadata/slice_info.config", sliceInfo);
