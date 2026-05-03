@@ -271,6 +271,9 @@ export async function processJobs(
  * Generate a utility-only 3MF that contains G-code with no actual print —
  * just the provided sequence repeated `cycles` times.
  * Useful for "clear plate" (1 cycle) or "test cycler" (N cycles).
+ *
+ * Builds a full OPC-compliant 3MF package so Bambu Studio accepts it
+ * (empty 3D model, content types, relationships, model settings, etc.).
  */
 export async function generateUtility3MF(
   swapSequence: string,
@@ -279,17 +282,69 @@ export async function generateUtility3MF(
   const gcode = Array(cycles).fill(swapSequence.trimEnd()).join("\n\n") + "\n";
   const gcodeHash = SparkMD5.hash(gcode);
 
+  const contentTypes = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>',
+    ' <Default Extension="gcode" ContentType="text/x.gcode"/>',
+    '</Types>',
+  ].join("\n");
+
+  const rels = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>',
+    '</Relationships>',
+  ].join("\n");
+
+  const model = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">',
+    ' <metadata name="Application">PlateRunner</metadata>',
+    ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
+    ' <resources/>',
+    ' <build/>',
+    '</model>',
+  ].join("\n");
+
+  const modelSettingsRels = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    ' <Relationship Target="/Metadata/plate_1.gcode" Id="rel-1" Type="http://schemas.bambulab.com/package/2021/gcode"/>',
+    '</Relationships>',
+  ].join("\n");
+
+  const modelSettings = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<config>',
+    '  <plate>',
+    '    <metadata key="plater_id" value="1"/>',
+    '    <metadata key="plater_name" value=""/>',
+    '    <metadata key="locked" value="false"/>',
+    '    <metadata key="gcode_file" value="Metadata/plate_1.gcode"/>',
+    '  </plate>',
+    '</config>',
+  ].join("\n");
+
   const sliceInfo = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<config>',
     '  <plate>',
     '    <metadata key="index" value="1"/>',
-    '    <filament id="1" type="PLA" used_g="0.00" used_m="0.00"/>',
+    '    <metadata key="prediction" value="0"/>',
+    '    <metadata key="weight" value="0.00"/>',
+    '    <filament id="1" type="PLA" color="#C0C0C0" used_m="0.00" used_g="0.00"/>',
     '  </plate>',
     '</config>',
   ].join("\n");
 
   const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("_rels/.rels", rels);
+  zip.file("3D/3dmodel.model", model);
+  zip.file("Metadata/_rels/model_settings.config.rels", modelSettingsRels);
+  zip.file("Metadata/model_settings.config", modelSettings);
   zip.file("Metadata/plate_1.gcode", gcode);
   zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
   zip.file("Metadata/slice_info.config", sliceInfo);
