@@ -272,14 +272,50 @@ export async function processJobs(
  * just the provided sequence repeated `cycles` times.
  * Useful for "clear plate" (1 cycle) or "test cycler" (N cycles).
  *
- * Builds a full OPC-compliant 3MF package so Bambu Studio accepts it
- * (empty 3D model, content types, relationships, model settings, etc.).
+ * Builds a full OPC-compliant 3MF package with proper gcode block structure
+ * (HEADER_BLOCK, CONFIG_BLOCK, EXECUTABLE_BLOCK) so Bambu Studio accepts it.
  */
 export async function generateUtility3MF(
   swapSequence: string,
   cycles: number = 1
 ): Promise<Blob> {
-  const gcode = Array(cycles).fill(swapSequence.trimEnd()).join("\n\n") + "\n";
+  // Build swap sections
+  const swapSections = Array.from({ length: cycles }, (_, i) => {
+    return `;swap start ${i + 1}\n\n${swapSequence.trimEnd()}\n\n;swap end`;
+  }).join("\n\n");
+
+  const gcode = [
+    "; HEADER_BLOCK_START",
+    "; PlateRunner utility gcode",
+    "; total estimated time: 0m 0s",
+    "; total layer number: 0",
+    "; max_z_height: 0.00",
+    "; HEADER_BLOCK_END",
+    "",
+    "; CONFIG_BLOCK_START",
+    "; CONFIG_BLOCK_END",
+    "",
+    "; EXECUTABLE_BLOCK_START",
+    "",
+    "M140 S0 ; turn off bed",
+    "M106 S0 ; turn off fan",
+    "M104 S0 ; turn off hotend",
+    "",
+    "; FEATURE: Custom",
+    "",
+    swapSections,
+    "",
+    "M140 S0 ; turn off bed",
+    "M106 S0 ; turn off fan",
+    "M104 S0 ; turn off hotend",
+    "",
+    "; EXECUTABLE_BLOCK_END",
+    "",
+    "; filament used [mm] = 0.00",
+    "; filament used [cm3] = 0.00",
+    "",
+  ].join("\n");
+
   const gcodeHash = SparkMD5.hash(gcode);
 
   const contentTypes = [
