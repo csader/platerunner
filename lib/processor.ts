@@ -336,6 +336,30 @@ export async function generateUtility3MF(
     zip.file("Metadata/slice_info.config", updatedSliceInfo);
   }
 
+  // Zero out temperatures in project_settings so the printer doesn't heat up
+  const projectSettingsFile = zip.file("Metadata/project_settings.config");
+  if (projectSettingsFile) {
+    const settings = JSON.parse(await projectSettingsFile.async("string"));
+    const zeroKeys = [
+      "cool_plate_temp", "cool_plate_temp_initial_layer",
+      "hot_plate_temp", "hot_plate_temp_initial_layer",
+      "eng_plate_temp", "eng_plate_temp_initial_layer",
+      "textured_plate_temp", "textured_plate_temp_initial_layer",
+      "nozzle_temperature", "nozzle_temperature_initial_layer",
+      "nozzle_temperature_range_high", "nozzle_temperature_range_low",
+    ];
+    for (const key of zeroKeys) {
+      if (key in settings) {
+        if (Array.isArray(settings[key])) {
+          settings[key] = settings[key].map(() => "0");
+        } else {
+          settings[key] = "0";
+        }
+      }
+    }
+    zip.file("Metadata/project_settings.config", JSON.stringify(settings, null, 4));
+  }
+
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
