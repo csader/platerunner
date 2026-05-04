@@ -280,23 +280,31 @@ export async function generateUtility3MF(
   swapSequence: string,
   cycles: number = 1
 ): Promise<Blob> {
+  // Load the bundled template 3MF and clone its structure
+  const response = await fetch("/template.3mf");
+  const templateBuffer = await response.arrayBuffer();
+  const zip = await JSZip.loadAsync(templateBuffer);
+
+  // Extract the template's original gcode to preserve header + config blocks
+  const templateGcodeFile = zip.file("Metadata/plate_1.gcode");
+  const templateGcode = templateGcodeFile
+    ? await templateGcodeFile.async("string")
+    : "";
+
+  // Keep everything up to and including EXECUTABLE_BLOCK_START
+  const execStartMarker = "; EXECUTABLE_BLOCK_START";
+  const execStartIdx = templateGcode.indexOf(execStartMarker);
+  const preamble = execStartIdx !== -1
+    ? templateGcode.slice(0, execStartIdx + execStartMarker.length)
+    : "; HEADER_BLOCK_START\n; PlateRunner utility gcode\n; HEADER_BLOCK_END\n\n; CONFIG_BLOCK_START\n; CONFIG_BLOCK_END\n\n; EXECUTABLE_BLOCK_START";
+
   // Build swap sections
   const swapSections = Array.from({ length: cycles }, (_, i) => {
     return `;swap start ${i + 1}\n\n${swapSequence.trimEnd()}\n\n;swap end`;
   }).join("\n\n");
 
   const gcode = [
-    "; HEADER_BLOCK_START",
-    "; PlateRunner utility gcode",
-    "; total estimated time: 0m 0s",
-    "; total layer number: 0",
-    "; max_z_height: 0.00",
-    "; HEADER_BLOCK_END",
-    "",
-    "; CONFIG_BLOCK_START",
-    "; CONFIG_BLOCK_END",
-    "",
-    "; EXECUTABLE_BLOCK_START",
+    preamble,
     "",
     "M140 S0 ; turn off bed",
     "M106 S0 ; turn off fan",
@@ -329,12 +337,7 @@ export async function generateUtility3MF(
 
   const gcodeHash = SparkMD5.hash(gcode);
 
-  // Load the bundled template 3MF and clone its structure
-  const response = await fetch("/template.3mf");
-  const templateBuffer = await response.arrayBuffer();
-  const zip = await JSZip.loadAsync(templateBuffer);
-
-  // Replace gcode and checksum, update filament totals
+  // Replace gcode and checksum
   zip.file("Metadata/plate_1.gcode", gcode);
   zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
 
