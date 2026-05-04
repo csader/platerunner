@@ -314,7 +314,7 @@ export async function generateUtility3MF(
     "",
     "M73 P0 R0;",
     "",
-    "G0 Z30 ; raise head first to clear any print on plate",
+    "G0 Z175 F5000 ; move Z to top to clear any print",
     "G28 X Y ; home X/Y only",
     "",
     swapSections,
