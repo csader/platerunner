@@ -272,8 +272,9 @@ export async function processJobs(
  * just the provided sequence repeated `cycles` times.
  * Useful for "clear plate" (1 cycle) or "test cycler" (N cycles).
  *
- * Builds a full OPC-compliant 3MF package with proper gcode block structure
- * (HEADER_BLOCK, CONFIG_BLOCK, EXECUTABLE_BLOCK) so Bambu Studio accepts it.
+ * Uses a bundled template 3MF (from a known-working sliced project) and
+ * replaces just the gcode and checksum — same approach as create3MF.
+ * This ensures Bambu Studio recognizes it as already sliced.
  */
 export async function generateUtility3MF(
   swapSequence: string,
@@ -318,149 +319,22 @@ export async function generateUtility3MF(
 
   const gcodeHash = SparkMD5.hash(gcode);
 
-  const contentTypes = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
-    ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
-    ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>',
-    ' <Default Extension="gcode" ContentType="text/x.gcode"/>',
-    '</Types>',
-  ].join("\n");
+  // Load the bundled template 3MF and clone its structure
+  const response = await fetch("/template.3mf");
+  const templateBuffer = await response.arrayBuffer();
+  const zip = await JSZip.loadAsync(templateBuffer);
 
-  const rels = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
-    ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>',
-    '</Relationships>',
-  ].join("\n");
-
-  // 3D model with a minimal 1mm cube so Bambu Studio doesn't complain about missing geometry
-  const model = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">',
-    ' <metadata name="Application">PlateRunner</metadata>',
-    ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
-    ' <resources>',
-    '  <object id="1" type="model">',
-    '   <mesh>',
-    '    <vertices>',
-    '     <vertex x="0" y="0" z="0"/>',
-    '     <vertex x="1" y="0" z="0"/>',
-    '     <vertex x="1" y="1" z="0"/>',
-    '     <vertex x="0" y="1" z="0"/>',
-    '     <vertex x="0" y="0" z="1"/>',
-    '     <vertex x="1" y="0" z="1"/>',
-    '     <vertex x="1" y="1" z="1"/>',
-    '     <vertex x="0" y="1" z="1"/>',
-    '    </vertices>',
-    '    <triangles>',
-    '     <triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="2" v3="3"/>',
-    '     <triangle v1="4" v2="6" v3="5"/><triangle v1="4" v2="7" v3="6"/>',
-    '     <triangle v1="0" v2="4" v3="5"/><triangle v1="0" v2="5" v3="1"/>',
-    '     <triangle v1="2" v2="6" v3="7"/><triangle v1="2" v2="7" v3="3"/>',
-    '     <triangle v1="0" v2="7" v3="4"/><triangle v1="0" v2="3" v3="7"/>',
-    '     <triangle v1="1" v2="5" v3="6"/><triangle v1="1" v2="6" v3="2"/>',
-    '    </triangles>',
-    '   </mesh>',
-    '  </object>',
-    ' </resources>',
-    ' <build>',
-    '  <item objectid="1" p:UUID="cb828680-f429-4706-a0f7-1000000000ff" transform="1 0 0 0 1 0 0 0 1 89 89 0"/>',
-    ' </build>',
-    '</model>',
-  ].join("\n");
-
-  const modelSettingsRels = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
-    ' <Relationship Target="/Metadata/plate_1.gcode" Id="rel-1" Type="http://schemas.bambulab.com/package/2021/gcode"/>',
-    '</Relationships>',
-  ].join("\n");
-
-  const modelSettings = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<config>',
-    '  <plate>',
-    '    <metadata key="plater_id" value="1"/>',
-    '    <metadata key="plater_name" value=""/>',
-    '    <metadata key="locked" value="false"/>',
-    '    <metadata key="gcode_file" value="Metadata/plate_1.gcode"/>',
-    '    <metadata key="pattern_bbox_file" value="Metadata/plate_1.json"/>',
-    '  </plate>',
-    '</config>',
-  ].join("\n");
-
-  const plateJson = JSON.stringify({
-    bbox_all: [89.0, 89.0, 91.0, 91.0],
-    bbox_objects: [{
-      area: 4.0,
-      bbox: [89.0, 89.0, 91.0, 91.0],
-      id: 1,
-      layer_height: 0.2,
-      name: "Cube",
-    }],
-    bed_type: "textured_plate",
-    filament_colors: ["#C0C0C0"],
-    filament_ids: [0],
-    first_extruder: 0,
-    is_seq_print: false,
-    nozzle_diameter: 0.4,
-    version: 2,
-  });
-
-  // Minimal project_settings.config so Bambu Studio recognizes this as a sliced project
-  const projectSettings = JSON.stringify({
-    printer_model: "Bambu Lab A1 mini",
-    printer_variant: "0.4",
-    printer_settings_id: "Bambu Lab A1 mini 0.4 nozzle",
-    print_settings_id: "0.20mm Standard @BBL A1M",
-    filament_settings_id: ["Generic PLA @BBL A1M"],
-    printer_technology: "FFF",
-  }, null, 4);
-
-  const sliceInfo = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<config>',
-    '  <header>',
-    '    <header_item key="X-BBL-Client-Type" value="slicer"/>',
-    '    <header_item key="X-BBL-Client-Version" value="01.09.01.67"/>',
-    '  </header>',
-    '  <plate>',
-    '    <metadata key="index" value="1"/>',
-    '    <metadata key="printer_model_id" value="N1"/>',
-    '    <metadata key="nozzle_diameters" value="0.4"/>',
-    '    <metadata key="prediction" value="0"/>',
-    '    <metadata key="weight" value="0.00"/>',
-    '    <metadata key="outside" value="false"/>',
-    '    <metadata key="support_used" value="false"/>',
-    '    <metadata key="label_object_enabled" value="false"/>',
-    '    <object identify_id="1" name="Cube" skipped="false"/>',
-    '    <filament id="1" type="PLA" color="#C0C0C0" used_m="0.00" used_g="0.00"/>',
-    '  </plate>',
-    '</config>',
-  ].join("\n");
-
-  const cutInfo = [
-    '<?xml version="1.0" encoding="utf-8"?>',
-    '<objects>',
-    ' <object id="1">',
-    '  <cut_id id="0" check_sum="1" connectors_cnt="0"/>',
-    ' </object>',
-    '</objects>',
-  ].join("\n");
-
-  const zip = new JSZip();
-  zip.file("[Content_Types].xml", contentTypes);
-  zip.file("_rels/.rels", rels);
-  zip.file("3D/3dmodel.model", model);
-  zip.file("Metadata/_rels/model_settings.config.rels", modelSettingsRels);
-  zip.file("Metadata/model_settings.config", modelSettings);
-  zip.file("Metadata/cut_information.xml", cutInfo);
+  // Replace gcode and checksum, update filament totals
   zip.file("Metadata/plate_1.gcode", gcode);
   zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
-  zip.file("Metadata/plate_1.json", plateJson);
-  zip.file("Metadata/project_settings.config", projectSettings);
-  zip.file("Metadata/slice_info.config", sliceInfo);
+
+  // Zero out filament usage in slice_info
+  const sliceInfoFile = zip.file("Metadata/slice_info.config");
+  if (sliceInfoFile) {
+    const sliceInfoXml = await sliceInfoFile.async("string");
+    const updatedSliceInfo = updateSliceInfo(sliceInfoXml, 0, 0);
+    zip.file("Metadata/slice_info.config", updatedSliceInfo);
+  }
 
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
