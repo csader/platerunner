@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Download, Loader2, RotateCcw, FlaskConical } from "lucide-react";
+import { Download, Loader2, RotateCcw, FlaskConical, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownItem,
+  DropdownSeparator,
+  DropdownLabel,
+} from "@/components/ui/dropdown-menu";
 import { Dropzone } from "@/components/dropzone";
 import { PrintQueue } from "@/components/print-queue";
 import { StatsDisplay } from "@/components/stats-display";
@@ -187,7 +193,42 @@ export default function Home() {
             Self-hosted 3MF processor for Bambu Lab A1 Mini PlateCycler automation
           </p>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <DropdownMenu
+            align="right"
+            trigger={
+              <Button variant="outline" size="sm" disabled={isProcessing}>
+                <Wrench className="mr-2 h-4 w-4" />
+                Tools
+              </Button>
+            }
+          >
+            <DropdownLabel>Quick Tools</DropdownLabel>
+            <DropdownItem onClick={handleClearPlate} disabled={isProcessing}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Clear Plate
+            </DropdownItem>
+            <DropdownSeparator />
+            <DropdownLabel>Test Cycler</DropdownLabel>
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={testCycles}
+                onChange={(e) => setTestCycles(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                className="w-16 h-8 text-sm"
+                disabled={isProcessing}
+              />
+              <span className="text-xs text-muted-foreground">cycles</span>
+            </div>
+            <DropdownItem onClick={handleTestCycler} disabled={isProcessing}>
+              <FlaskConical className="mr-2 h-4 w-4" />
+              Run Test Cycler
+            </DropdownItem>
+          </DropdownMenu>
+          <ThemeToggle />
+        </div>
       </div>
 
       {/* Error Display */}
@@ -231,48 +272,6 @@ export default function Home() {
           sequence={sequence}
           onSequenceChange={handleSequenceChange}
         />
-      </div>
-
-      {/* Quick Tools */}
-      <div className="mb-6">
-        <h2 className="mb-3 text-lg font-semibold">Quick Tools</h2>
-        <div className="flex flex-wrap items-end gap-3">
-          <Button
-            variant="outline"
-            onClick={handleClearPlate}
-            disabled={isProcessing}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Clear Plate
-          </Button>
-          <div className="flex items-end gap-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Cycles
-              </label>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                value={testCycles}
-                onChange={(e) => setTestCycles(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-                className="w-20"
-                disabled={isProcessing}
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={handleTestCycler}
-              disabled={isProcessing}
-            >
-              <FlaskConical className="mr-2 h-4 w-4" />
-              Test Cycler
-            </Button>
-          </div>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Clear Plate runs one swap cycle to remove the current plate. Test Cycler runs multiple swap cycles without printing — useful for calibration.
-        </p>
       </div>
 
       {/* Filename & Process Button */}
