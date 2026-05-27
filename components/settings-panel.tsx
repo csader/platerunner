@@ -36,20 +36,21 @@ interface SettingsPanelProps {
 const PROFILE_FIELDS: {
   key: keyof SwapProfile;
   label: string;
+  description: string;
   unit: string;
   min: number;
   max: number;
   step: number;
 }[] = [
-  { key: "pushSpeed", label: "Push Speed", unit: "mm/min", min: 200, max: 2000, step: 50 },
-  { key: "precisionSpeed", label: "Precision Speed", unit: "mm/min", min: 100, max: 1000, step: 50 },
-  { key: "travelSpeed", label: "Travel Speed", unit: "mm/min", min: 1000, max: 6000, step: 100 },
-  { key: "fastTravel", label: "Fast Travel", unit: "mm/min", min: 3000, max: 12000, step: 500 },
-  { key: "dwellMs", label: "Dwell Time", unit: "ms", min: 100, max: 1000, step: 50 },
-  { key: "finalDwellMs", label: "Final Dwell", unit: "ms", min: 250, max: 2000, step: 50 },
-  { key: "zClearance", label: "Z Clearance", unit: "mm", min: 100, max: 200, step: 5 },
-  { key: "zLip", label: "Z Lip Height", unit: "mm", min: 170, max: 200, step: 1 },
-  { key: "zLower", label: "Z Lower", unit: "mm", min: 50, max: 150, step: 5 },
+  { key: "pushSpeed", label: "Push Speed", description: "Speed for pushing plates on/off the bed", unit: "mm/min", min: 200, max: 2000, step: 50 },
+  { key: "precisionSpeed", label: "Precision Speed", description: "Speed for final plate seating and homing", unit: "mm/min", min: 100, max: 1000, step: 50 },
+  { key: "travelSpeed", label: "Travel Speed", description: "Speed for positioning moves between pushes", unit: "mm/min", min: 1000, max: 6000, step: 100 },
+  { key: "fastTravel", label: "Fast Travel", description: "Speed for long repositioning moves", unit: "mm/min", min: 3000, max: 12000, step: 500 },
+  { key: "dwellMs", label: "Dwell Time", description: "Pause after each precision move to let motion settle", unit: "ms", min: 100, max: 1000, step: 50 },
+  { key: "finalDwellMs", label: "Final Dwell", description: "Pause at end of swap before next print starts", unit: "ms", min: 250, max: 2000, step: 50 },
+  { key: "zClearance", label: "Z Clearance", description: "Height to raise Z to clear the printed part", unit: "mm", min: 100, max: 200, step: 5 },
+  { key: "zLip", label: "Z Lip Height", description: "Height above the plate lip for the push arm", unit: "mm", min: 170, max: 200, step: 1 },
+  { key: "zLower", label: "Z Lower", description: "Height to lower Z after plate is seated", unit: "mm", min: 50, max: 150, step: 5 },
 ];
 
 export function SettingsPanel({
@@ -181,7 +182,7 @@ export function SettingsPanel({
           {mode === "advanced" && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {PROFILE_FIELDS.map(({ key, label, unit, min, max, step }) => (
+                {PROFILE_FIELDS.map(({ key, label, description, unit, min, max, step }) => (
                   <div key={key} className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-medium">{label}</label>
@@ -189,6 +190,7 @@ export function SettingsPanel({
                         {customProfile[key]} {unit}
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">{description}</p>
                     <input
                       type="range"
                       min={min}
