@@ -21,6 +21,8 @@ export interface PrintJob {
   thumbnailUrl: string | null;
   copies: number;
   originalZip: JSZip;
+  /** The plate prefix detected in the 3MF, e.g. "Metadata/plate_1" or "Metadata/plate_2" */
+  platePrefix: string;
 }
 
 /**
@@ -104,18 +106,25 @@ export async function parse3MF(file: File): Promise<PrintJob> {
   const allFiles = Object.keys(zip.files);
   console.log("All files in 3MF:", allFiles.join("\n"));
 
-  // Extract gcode - try multiple possible paths
-  const gcodeFile = findFile(zip,
+  // Extract gcode - try plate_1 first, then find any plate_N.gcode
+  let gcodeFile = findFile(zip,
     "Metadata/plate_1.gcode",
     "metadata/plate_1.gcode",
     "Metadata/Plate_1.gcode"
   );
+  let platePrefix = "Metadata/plate_1";
 
   if (!gcodeFile) {
-    // Log available files for debugging
+    // Look for any plate_N.gcode file (e.g. plate_2.gcode when sliced from a non-first plate)
+    const gcodeMatch = allFiles.find(f => /^Metadata\/plate_\d+\.gcode$/i.test(f));
+    if (gcodeMatch) {
+      gcodeFile = zip.file(gcodeMatch);
+      platePrefix = gcodeMatch.replace(/\.gcode$/i, "");
+    }
+  }
+
+  if (!gcodeFile) {
     const gcodeFiles = allFiles.filter(f => f.toLowerCase().includes("gcode"));
-    console.error("Available gcode files:", gcodeFiles);
-    console.error("All files:", allFiles);
     throw new Error(`No gcode found in 3MF file. Found ${allFiles.length} files, gcode matches: ${gcodeFiles.join(", ") || "none"}`);
   }
   const gcode = await gcodeFile.async("string");
@@ -131,7 +140,7 @@ export async function parse3MF(file: File): Promise<PrintJob> {
 
   // Try to extract thumbnail
   let thumbnailUrl: string | null = null;
-  const thumbnailFile = findFile(zip, "Metadata/plate_1.png", "metadata/plate_1.png");
+  const thumbnailFile = findFile(zip, `${platePrefix}.png`);
   if (thumbnailFile) {
     const thumbnailBlob = await thumbnailFile.async("blob");
     thumbnailUrl = URL.createObjectURL(thumbnailBlob);
@@ -150,6 +159,7 @@ export async function parse3MF(file: File): Promise<PrintJob> {
     thumbnailUrl,
     copies: 1,
     originalZip: zip,
+    platePrefix,
   };
 }
 
@@ -240,9 +250,10 @@ export async function create3MF(
   // Calculate MD5 of gcode
   const gcodeHash = SparkMD5.hash(combinedGcode);
 
-  // Update files in zip
-  zip.file("Metadata/plate_1.gcode", combinedGcode);
-  zip.file("Metadata/plate_1.gcode.md5", gcodeHash);
+  // Update files in zip using the original plate prefix
+  const prefix = baseJob.platePrefix;
+  zip.file(`${prefix}.gcode`, combinedGcode);
+  zip.file(`${prefix}.gcode.md5`, gcodeHash);
   zip.file("Metadata/slice_info.config", updatedSliceInfo);
 
   // Generate the zip
