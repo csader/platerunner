@@ -4,6 +4,7 @@ import {
   parseGcodeMetadata,
   parseSliceInfo,
   updateSliceInfo,
+  mergeSliceInfo,
   type GcodeMetadata,
 } from "./gcode-parser";
 
@@ -237,14 +238,9 @@ export async function create3MF(
   // Clone the base zip
   const zip = baseJob.originalZip;
 
-  // Calculate total filament
-  const { totalGrams, totalMeters } = calculateTotalFilament(jobs);
-
-  // Update slice info
-  const updatedSliceInfo = updateSliceInfo(
-    baseJob.sliceInfoXml,
-    totalGrams,
-    totalMeters
+  // Merge slice info from all jobs (combines filament entries)
+  const mergedSliceInfo = mergeSliceInfo(
+    jobs.map(job => ({ sliceInfoXml: job.sliceInfoXml, copies: job.copies }))
   );
 
   // Calculate MD5 of gcode
@@ -254,7 +250,7 @@ export async function create3MF(
   const prefix = baseJob.platePrefix;
   zip.file(`${prefix}.gcode`, combinedGcode);
   zip.file(`${prefix}.gcode.md5`, gcodeHash);
-  zip.file("Metadata/slice_info.config", updatedSliceInfo);
+  zip.file("Metadata/slice_info.config", mergedSliceInfo);
 
   // Generate the zip
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });

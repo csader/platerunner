@@ -100,3 +100,93 @@ export function updateSliceInfo(
     .replace(/used_g="[\d.]+"/, `used_g="${totalUsedG.toFixed(2)}"`)
     .replace(/used_m="[\d.]+"/, `used_m="${totalUsedM.toFixed(2)}"`);
 }
+
+interface FilamentEntry {
+  id: string;
+  attributes: Record<string, string>;
+  rawLine: string;
+}
+
+/**
+ * Parse all <filament .../> elements from slice_info.config XML
+ */
+function parseFilamentEntries(xml: string): FilamentEntry[] {
+  const entries: FilamentEntry[] = [];
+  const regex = /<filament\s+([^/>]+)\/>/g;
+  let match;
+
+  while ((match = regex.exec(xml)) !== null) {
+    const attrString = match[1];
+    const attributes: Record<string, string> = {};
+    const attrRegex = /(\w+)="([^"]*)"/g;
+    let attrMatch;
+
+    while ((attrMatch = attrRegex.exec(attrString)) !== null) {
+      attributes[attrMatch[1]] = attrMatch[2];
+    }
+
+    entries.push({
+      id: attributes.id || "0",
+      attributes,
+      rawLine: match[0],
+    });
+  }
+
+  return entries;
+}
+
+/**
+ * Rebuild a <filament .../> element from attributes
+ */
+function buildFilamentElement(attrs: Record<string, string>): string {
+  const parts = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`);
+  return `    <filament ${parts.join(" ")}/>`;
+}
+
+/**
+ * Merge slice_info.config XML from multiple jobs, combining all filament entries.
+ * Same-id filaments get their usage summed; different-id filaments are all included.
+ */
+export function mergeSliceInfo(
+  jobs: { sliceInfoXml: string; copies: number }[]
+): string {
+  if (jobs.length === 0) return "";
+
+  const baseXml = jobs[0].sliceInfoXml;
+  if (!baseXml) return "";
+
+  // Collect all filaments keyed by id, summing usage
+  const merged = new Map<string, Record<string, string>>();
+
+  for (const job of jobs) {
+    const entries = parseFilamentEntries(job.sliceInfoXml);
+    for (const entry of entries) {
+      const existing = merged.get(entry.id);
+      const usedG = parseFloat(entry.attributes.used_g || "0") * job.copies;
+      const usedM = parseFloat(entry.attributes.used_m || "0") * job.copies;
+
+      if (existing) {
+        existing.used_g = (parseFloat(existing.used_g || "0") + usedG).toFixed(2);
+        existing.used_m = (parseFloat(existing.used_m || "0") + usedM).toFixed(2);
+      } else {
+        merged.set(entry.id, {
+          ...entry.attributes,
+          used_g: usedG.toFixed(2),
+          used_m: usedM.toFixed(2),
+        });
+      }
+    }
+  }
+
+  // Remove all existing <filament .../> lines from the base XML
+  let result = baseXml.replace(/<filament\s+[^/>]+\/>\s*\n?/g, "");
+
+  // Insert merged filament elements before </plate>
+  const filamentLines = Array.from(merged.values())
+    .map(buildFilamentElement)
+    .join("\n");
+
+  result = result.replace("</plate>", `${filamentLines}\n  </plate>`);
+
+  return result;
+}
