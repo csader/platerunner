@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Download, Loader2, RotateCcw, FlaskConical, Wrench } from "lucide-react";
+import { Download, Loader2, RotateCcw, FlaskConical, Wrench, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +15,12 @@ import { PrintQueue } from "@/components/print-queue";
 import { StatsDisplay } from "@/components/stats-display";
 import { SettingsPanel } from "@/components/settings-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ModeToggle } from "@/components/mode-toggle";
+import { PrinterConnection } from "@/components/printer-connection";
+import { PrinterStatusDisplay } from "@/components/printer-status-display";
+import { LiveQueueControls } from "@/components/live-queue-controls";
+import { LiveQueueItem } from "@/components/live-queue-item";
+import { usePrinterSSE } from "@/hooks/use-printer-sse";
 import {
   parse3MF,
   processJobs,
@@ -30,6 +36,7 @@ import {
   loadActiveSequence,
   saveActiveSequence,
 } from "@/lib/plate-swap";
+import { SwapMethod } from "@/lib/types/live-queue";
 
 export default function Home() {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
@@ -38,6 +45,20 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [customFilename, setCustomFilename] = useState("");
   const [testCycles, setTestCycles] = useState(5);
+  const [mode, setMode] = useState<"combined" | "live-queue">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("platerunner-mode") as "combined" | "live-queue") || "combined";
+    }
+    return "combined";
+  });
+
+  const snapshot = usePrinterSSE(mode === "live-queue");
+
+  // Persist mode
+  const handleModeChange = useCallback((newMode: "combined" | "live-queue") => {
+    setMode(newMode);
+    localStorage.setItem("platerunner-mode", newMode);
+  }, []);
 
   // Load saved sequence on mount
   useEffect(() => {
@@ -173,6 +194,63 @@ export default function Home() {
     }
   }, [jobs, sequence, filenameToUse]);
 
+  // --- Live Queue handlers ---
+  const handlePrinterConnect = useCallback(async (ip: string, serial: string, accessCode: string) => {
+    const res = await fetch("/api/printer/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ip, serial, accessCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Connection failed");
+  }, []);
+
+  const handlePrinterDisconnect = useCallback(async () => {
+    await fetch("/api/printer/disconnect", { method: "POST" });
+  }, []);
+
+  const handleLiveFilesAdded = useCallback(async (files: File[]) => {
+    setError(null);
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("copies", "1");
+      const res = await fetch("/api/queue/jobs", { method: "POST", body: formData });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(`Failed to add ${file.name}: ${data.error}`);
+      }
+    }
+  }, []);
+
+  const handleLiveRemove = useCallback(async (id: string) => {
+    await fetch("/api/queue/jobs", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  }, []);
+
+  const handleQueueControl = useCallback(async (action: string) => {
+    const body: Record<string, string> = { action };
+    if (action === "start") {
+      body.swapSequence = sequence;
+    }
+    await fetch("/api/queue/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }, [sequence]);
+
+  const handleSwapMethodChange = useCallback(async (method: SwapMethod) => {
+    await fetch("/api/queue/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ swapMethod: method }),
+    });
+  }, []);
+
   // Calculate stats
   const totalTime = calculateTotalTime(jobs);
   const { totalGrams, totalMeters } = calculateTotalFilament(jobs);
@@ -231,6 +309,11 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Mode Toggle */}
+      <div className="mb-6">
+        <ModeToggle mode={mode} onModeChange={handleModeChange} />
+      </div>
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -238,80 +321,154 @@ export default function Home() {
         </div>
       )}
 
-      {/* Upload Area */}
-      <div className="mb-6">
-        <Dropzone onFilesAdded={handleFilesAdded} disabled={isProcessing} />
-      </div>
-
-      {/* Stats */}
-      {jobs.length > 0 && (
-        <div className="mb-6">
-          <StatsDisplay
-            totalTimeSeconds={totalTime}
-            totalWeightGrams={totalGrams}
-            totalLengthMeters={totalMeters}
-            plateSwaps={plateSwaps}
-          />
-        </div>
-      )}
-
-      {/* Print Queue */}
-      <div className="mb-6">
-        <h2 className="mb-3 text-lg font-semibold">Print Queue</h2>
-        <PrintQueue
-          jobs={jobs}
-          onReorder={handleReorder}
-          onUpdateCopies={handleUpdateCopies}
-          onRemove={handleRemove}
-        />
-      </div>
-
-      {/* Settings */}
-      <div className="mb-6">
-        <SettingsPanel
-          sequence={sequence}
-          onSequenceChange={handleSequenceChange}
-        />
-      </div>
-
-      {/* Filename & Process Button */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <label className="mb-1.5 block text-sm font-medium">
-            Output Filename
-          </label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              value={customFilename}
-              onChange={(e) => setCustomFilename(e.target.value)}
-              placeholder={suggestedFilename}
-              disabled={jobs.length === 0 || isProcessing}
-              className="flex-1"
-            />
-            <span className="text-sm text-muted-foreground">.3mf</span>
+      {mode === "combined" ? (
+        <>
+          {/* Upload Area */}
+          <div className="mb-6">
+            <Dropzone onFilesAdded={handleFilesAdded} disabled={isProcessing} />
           </div>
-        </div>
-        <div className="pt-6">
-          <Button
-            size="lg"
-            onClick={handleProcess}
-            disabled={jobs.length === 0 || isProcessing}
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Process & Download
-              </>
+
+          {/* Stats */}
+          {jobs.length > 0 && (
+            <div className="mb-6">
+              <StatsDisplay
+                totalTimeSeconds={totalTime}
+                totalWeightGrams={totalGrams}
+                totalLengthMeters={totalMeters}
+                plateSwaps={plateSwaps}
+              />
+            </div>
+          )}
+
+          {/* Print Queue */}
+          <div className="mb-6">
+            <h2 className="mb-3 text-lg font-semibold">Print Queue</h2>
+            <PrintQueue
+              jobs={jobs}
+              onReorder={handleReorder}
+              onUpdateCopies={handleUpdateCopies}
+              onRemove={handleRemove}
+            />
+          </div>
+
+          {/* Settings */}
+          <div className="mb-6">
+            <SettingsPanel
+              sequence={sequence}
+              onSequenceChange={handleSequenceChange}
+            />
+          </div>
+
+          {/* Filename & Process Button */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="mb-1.5 block text-sm font-medium">
+                Output Filename
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  value={customFilename}
+                  onChange={(e) => setCustomFilename(e.target.value)}
+                  placeholder={suggestedFilename}
+                  disabled={jobs.length === 0 || isProcessing}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground">.3mf</span>
+              </div>
+            </div>
+            <div className="pt-6">
+              <Button
+                size="lg"
+                onClick={handleProcess}
+                disabled={jobs.length === 0 || isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Process & Download
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Live Queue Mode */}
+          <div className="space-y-4">
+            {/* Printer Connection */}
+            <PrinterConnection
+              connected={snapshot.printerStatus.connected}
+              onConnect={handlePrinterConnect}
+              onDisconnect={handlePrinterDisconnect}
+            />
+
+            {/* Printer Status */}
+            <PrinterStatusDisplay status={snapshot.printerStatus} />
+
+            {/* Queue Error */}
+            {snapshot.error && (
+              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Queue error: {snapshot.error}
+              </div>
             )}
-          </Button>
-        </div>
-      </div>
+
+            {/* Upload for live queue */}
+            {snapshot.printerStatus.connected && (
+              <div>
+                <Dropzone onFilesAdded={handleLiveFilesAdded} disabled={false} />
+              </div>
+            )}
+
+            {/* Live Queue List */}
+            {snapshot.jobs.length > 0 && (
+              <div>
+                <h2 className="mb-3 text-lg font-semibold">Live Queue</h2>
+                <div className="space-y-2">
+                  {snapshot.jobs.map((job) => (
+                    <LiveQueueItem
+                      key={job.id}
+                      id={job.id}
+                      name={job.name}
+                      copies={job.copies}
+                      currentCopy={job.currentCopy}
+                      status={job.status}
+                      isCurrent={job.id === snapshot.currentJobId}
+                      onRemove={handleLiveRemove}
+                      disabled={snapshot.state !== "idle" && snapshot.state !== "completed"}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Settings (swap sequence) */}
+            {snapshot.printerStatus.connected && (
+              <SettingsPanel
+                sequence={sequence}
+                onSequenceChange={handleSequenceChange}
+              />
+            )}
+
+            {/* Queue Controls */}
+            {snapshot.printerStatus.connected && (
+              <LiveQueueControls
+                queueState={snapshot.state}
+                swapMethod={snapshot.swapMethod}
+                hasJobs={snapshot.jobs.length > 0}
+                onControl={handleQueueControl}
+                onSwapMethodChange={handleSwapMethodChange}
+              />
+            )}
+          </div>
+        </>
+      )}
     </main>
   );
 }
